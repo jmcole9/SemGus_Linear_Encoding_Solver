@@ -1,0 +1,43 @@
+(set-info :author "James Cole")
+(set-info :realizable true)
+
+;; Declarations of term types and their syntactic constructors
+(declare-term-types
+  ((E 0))  ; Terms of type E represent integer-valued expressions
+
+  ;; Syntactic constructors for integer expressions
+  ((($x)          ; E -> x
+    ($y)          ;    | y
+    ($+ E E))))   ;    | (+ E E)
+
+;; Declarations of semantics associated with the syntax defined above
+(define-funs-rec
+  ;; Declare the signature of the semantic relation for E
+  ((E.Sem ((t_e E) (x Int) (y Int) (r Int)) Bool))  ; Integer exprs relate inputs (x: Int, y: Int) to outputs r: Int
+
+  ;; Declare the semantic rules for E
+  (! (match t_e
+         ;; Leaves
+         (($x (= r x))
+          ($y (= r y))
+
+         ;; + operator
+         (($+ et1 et2)
+           (exists ((r1 Int) (r2 Int))
+             (and
+               (E.Sem et1 x y r1)
+               (E.Sem et2 x y r2)
+               (= r (+ r1 r2)))))))
+     ;; Mark x and y as "inputs" and r as an "output"
+     :input (x y) :output (r)))
+
+;; Declare the synthesis objective
+;; We want an integer expression called "sum2"
+(synth-fun sum2 () E)
+
+;; We provide an example-guided constraint
+(constraint (E.Sem sum2 3 5 8))
+(constraint (E.Sem sum2 7 2 9))
+
+;; Synthesize "sum2"!
+(check-synth)
