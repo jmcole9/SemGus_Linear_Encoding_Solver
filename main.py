@@ -20,20 +20,9 @@ def main():
     print("Converting .sem to JSON...")
     parser = SemGusParser(args.exe_path, args.sem_file, args.json_output)
     parser.convert_sem_to_json()
-    #else:
-        #print("JSON file already exists, skipping conversion.")
 
     parser = SemGusParser(args.exe_path, args.sem_file, args.json_output)
     parser.parse_json()
-
-    print("Hello")
-    print(parser.grammar)
-    #print(parser.specification)
-    #for key, value in parser.semantic_rules.items():
-    #    print(key + ": " + str(value))
-    print("Goodbye")
-    #print(parser.semantic_rules)
-    #print(parser.specification)
 
     solver = SemGusSolver(
         grammar=parser.grammar,

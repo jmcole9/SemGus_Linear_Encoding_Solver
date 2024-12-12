@@ -1,0 +1,94 @@
+;; Metadata about the synthesis problem
+(set-info :author "James Cole")
+(set-info :realizable true)
+
+;; Declarations of term types and their syntactic constructors
+;; Terms of type E will be integer-valued expressions; terms of type B will be Boolean-valued expressions 
+(declare-term-types
+  ((E 0) (B 0))
+  
+   ;; Syntactic constructors for integer expressions
+  ((($x)          ; E -> x
+    ($y)          ;    | y
+    ($0)          ;    | 0
+    ($1)          ;    | 1
+    ($+ E E)      ;    | (+ E E)
+    ($ite B E E)) ;    | (ite B E E)
+   
+   ;; Syntactic constructors for Boolean expressions
+   (($true)     ; B -> true
+    ($false)    ;    | false
+    ($not B)    ;    | (not B)
+    ($and B B)  ;    | (and B B)
+    ($< E E)))) ;    | (< E E)
+
+;; Declarations of semantics associated with the syntax defined above
+(define-funs-rec
+  ((E.Sem ((t_e E) (x Int) (y Int) (r Int)) Bool)    ; Integer exprs relate inputs (x: Int, y: Int) to outputs r: Int
+   (B.Sem ((t_b B) (x Int) (y Int) (rb Bool)) Bool)) ; Boolean exprs relate inputs (x: Int, y: Int) to outputs rb: Bool
+
+   ;; Declare the semantic rules for E
+  ((! (match t_e
+         ;; Leaves, with a CHC body (= r _)
+        (($x (= r x))
+         ($y (= r y))
+         ($0 (= r 0))
+         ($1 (= r 1))
+
+         ;; + operator, with other E as children
+         (($+ et1 et2)
+           (exists ((r1 Int) (r2 Int))
+             (and
+               (E.Sem et1 x y r1)
+               (E.Sem et2 x y r2)
+               (= r (+ r1 r2)))))
+         
+         ;; If-then-else, with an additional B as a child
+         (($ite bt1 et1 et2)
+           ;; Note there are two CHCs bodies for this one
+           ;; One when B is true...
+           (exists ((rb Bool))
+             (and
+               (B.Sem bt1 x y rb)
+               (= rb true)
+               (E.Sem et1 x y r)))
+           ;; ...and one when B is false
+           (exists ((rb Bool))
+             (and
+               (B.Sem bt1 x y rb)
+               (= rb false)
+               (E.Sem et2 x y r))))))
+     
+     ;; Mark x and y as "inputs" and r as an "output" for the E.Sem relation
+     :input (x y) :output (r))
+   
+   ;; Declare the semantic rules for B
+   (! (match t_b
+        (($true (= rb true))
+         ($false (= rb false))
+         (($not bt1)
+           (exists ((rb1 Bool))
+             (and
+               (B.Sem bt1 x y rb1)
+               (= rb (not rb1)))))
+         (($and bt1 bt2)
+           (exists ((rb1 Bool) (rb2 Bool))
+             (and
+               (B.Sem bt1 x y rb1)
+               (B.Sem bt2 x y rb2)
+               (= rb (and rb1 rb2)))))
+         (($< et1 et2)
+           (exists ((r1 Int) (r2 Int))
+             (and
+               (E.Sem et1 x y r1)
+               (E.Sem et2 x y r2)
+               (= rb (< r1 r2)))))))
+     :input (x y) :output (rb))))
+
+;; Declare the synthesis objective
+(synth-fun max2 () E)
+
+(constraint (E.Sem max2 4 2 6))
+(constraint (E.Sem max2 2 5 7))
+
+(check-synth)

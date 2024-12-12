@@ -16,8 +16,6 @@ class SemGusSolver:
         Encodes the problem into a linear format using Z3.
         """
 
-        print(z3.get_version_string())
-
         # Max size of program
         L = self.max_size
 
@@ -60,7 +58,7 @@ class SemGusSolver:
         # Mapppings of each variable to their example
         ex_vars = []
 
-
+        # Fill various data structures
         for nonterminal, production in self.grammar.items():
             nts[nonterminal] = N
             N += 1
@@ -135,28 +133,6 @@ class SemGusSolver:
             ex_vars.append(var_mappings)
 
         P = len(production_mappings)
-
-        '''
-        print(nts)
-        print(nt_prods)
-        print(production_mappings)
-        print(children)
-        print(funcs)
-        print(symbols)
-        print(chcs)
-        print(examples)
-        print(ex_vars)
-
-        print("L: " + str(L))
-        print("K: " + str(K))
-        print("N: " + str(N))
-
-
-        for constraint in self.specification:
-            print(constraint)
-        '''
-
-        print(production_mappings)
         
         # Uninterpreted function: n_l maps statement lines to nonterminal identifiers
         # Domain: [0..D-1], Range: [0..N-1]
@@ -206,6 +182,7 @@ class SemGusSolver:
         # Encoding: n_l(L-1) = S; last line is starting nonterminal
         constraints.append(n_l(L - 1) == S)
 
+        # Encoding: Assigns each child to appropriate nonterminal and lower line than parent
         for i in range(L):
             for production, child in children.items():
                 child_constraints = []
@@ -217,6 +194,7 @@ class SemGusSolver:
                         Implies(p_l(i) == production_mappings[production],And(*child_constraints))
                     )
 
+            # Encoding: Ensures consistency between nonterminal and production for each line
             for nt in range(len(nt_prods)):
                 constraints.append(
                     Implies(n_l(i) == nt, Or([p_l(i) == p for _, p in nt_prods[nt].items()]))
@@ -253,8 +231,18 @@ class SemGusSolver:
                             embedded_rule = rule[1][1]
                             if embedded_rule[0] == '+':
                                 return v_e_l(example, line) == v_e_l(example,c(children_values[0][0],children_values[0][1])) + v_e_l(example,c(children_values[1][0],children_values[1][1]))
+                            if embedded_rule[0] == '-':
+                                return v_e_l(example, line) == v_e_l(example,c(children_values[0][0],children_values[0][1])) - v_e_l(example,c(children_values[1][0],children_values[1][1]))
+                            if embedded_rule[0] == '*':
+                                return v_e_l(example, line) == v_e_l(example,c(children_values[0][0],children_values[0][1])) * v_e_l(example,c(children_values[1][0],children_values[1][1]))
+                            if embedded_rule[0] == '/':
+                                return v_e_l(example, line) == v_e_l(example,c(children_values[0][0],children_values[0][1])) / v_e_l(example,c(children_values[1][0],children_values[1][1]))
                             if embedded_rule[0] == '<':
                                 return If(v_e_l(example,c(children_values[0][0],children_values[0][1])) < v_e_l(example,c(children_values[1][0],children_values[1][1])),v_e_l(example, line) == 1,v_e_l(example, line) == 0)
+                            if embedded_rule[0] == '>':
+                                return If(v_e_l(example,c(children_values[0][0],children_values[0][1])) > v_e_l(example,c(children_values[1][0],children_values[1][1])),v_e_l(example, line) == 1,v_e_l(example, line) == 0)
+                            if embedded_rule[0] == '==':
+                                return If(v_e_l(example,c(children_values[0][0],children_values[0][1])) == v_e_l(example,c(children_values[1][0],children_values[1][1])),v_e_l(example, line) == 1,v_e_l(example, line) == 0)
                             if embedded_rule[0] == 'not':
                                 return If(Not(v_e_l(example,c(children_values[0][0],children_values[0][1])) == 1), v_e_l(example, line) == 1, v_e_l(example, line) == 0)
                             if embedded_rule[0] == 'and':
@@ -278,51 +266,39 @@ class SemGusSolver:
                         Implies(p_l(j) == production_mappings[production],op(production, children_values,ex_vars[i],i,j))
                     )
 
-        for c in constraints:
-            self.solver.add(c)
-
-        #for c in constraints:
-        #    print(c)
-
-        '''
-        for i in range(0, len(constraints), 10):  # Adjust the batch size as needed
-            partial_constraints = constraints[i:i+10]
-            for c in partial_constraints:
-                self.solver.assert_and_track(c, f"Constraint_{j}")
-                j += 1
-
-            result = self.solver.check()
-            print(f"Check after adding {i}-{i+10} constraints: {result}")
-
-            if result == "unsat":
-                print("Found unsat in this batch.")
-                break
-        '''
+        for x in constraints:
+            self.solver.add(x)
         
+        result = self.solver.check()
+
+        def build_program(model, l):
+            index = model.eval(p_l(l))
+            prod = next((k for k, v in production_mappings.items() if v == index), None)
+            if (len(children[prod]) == 0):
+                return " " + str(prod[1:]) + " "
+            else:
+                program = str(prod[1:]) + " ( "
+                for i in range(len(children[prod])):
+                    child_index = model.eval(c(l,i))
+                    program += build_program(model, child_index)
+                program += " ) "
+                return program
+
+        if result == "unsat":
+            print("No Solution")
+        else:
+            print("Solution found:")
+            model = self.solver.model()
+            #for var in model:
+            #    print(f"{var}: {model[var]}")
+            print(build_program(model, L-1))
+
 
     def solve(self):
         """
         Solves the problem and prints results.
         """
+
         print("Encoding problem...")
         self.linear_encoding()
-        
-        result = self.solver.check()
 
-        print("Solution found:")
-        model = self.solver.model()
-        for var in model:
-            print(f"{var}: {model[var]}")
-
-        '''    
-        if result == "sat":
-            print("Solution found:")
-            model = self.solver.model()
-            for var in model:
-                print(f"{var}: {model[var]}")
-        else:
-            unsat_core = self.solver.unsat_core()
-            print("Unsat Core:", unsat_core)
-            print(self.solver.statistics())
-            print("No solution found.")
-        '''
